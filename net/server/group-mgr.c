@@ -139,35 +139,43 @@ create_group_common (CcnetGroupManager *mgr,
     CcnetDB *db = mgr->priv->db;
     gint64 now = get_current_time();
     char sql[512];
+    int group_id = -1;
+
+    char *esc_group_name = ccnet_db_escape_string (db, group_name);
+    char *esc_user_name = ccnet_db_escape_string (db, user_name);
     
     snprintf (sql, sizeof(sql), "INSERT INTO `Group`(`group_name`, "
               "`creator_name`, `timestamp`) VALUES('%s', '%s', "
-              "%"G_GINT64_FORMAT")", group_name, user_name, now);
+              "%"G_GINT64_FORMAT")", esc_group_name, esc_user_name, now);
 
     if (ccnet_db_query (db, sql) < 0) {
         g_set_error (error, CCNET_DOMAIN, 0, "Failed to create group");
-        return -1;
+        goto out;
     }
 
     snprintf (sql, sizeof(sql),"SELECT `group_id` FROM `Group` WHERE "
               "`group_name` = '%s' AND `creator_name` = '%s' AND"
-              " `timestamp` = %"G_GINT64_FORMAT"", group_name, user_name, now);
-    int group_id = ccnet_db_get_int (db, sql);
+              " `timestamp` = %"G_GINT64_FORMAT"",
+              esc_group_name, esc_user_name, now);
+    group_id = ccnet_db_get_int (db, sql);
     if (group_id < 0) {
         g_set_error (error, CCNET_DOMAIN, 0, "Failed to create group");
-        return -1;
+        goto out;
     }
     
     snprintf (sql, sizeof(sql), "INSERT INTO `GroupUser` VALUES (%d, '%s', %d)",
-              group_id, user_name, 1);
+              group_id, esc_user_name, 1);
     if (ccnet_db_query (db, sql) < 0) {
         snprintf (sql, sizeof(sql), "DELETE FROM `Group` WHERE `group_id`=%d",
                   group_id);
         ccnet_db_query (db, sql);
         g_set_error (error, CCNET_DOMAIN, 0, "Failed to create group");
-        return -1;
+        group_id = -1;
     }
-    
+
+out:
+    g_free (esc_group_name);
+    g_free (esc_user_name);
     return group_id;
 }
 
@@ -287,9 +295,11 @@ check_group_staff (CcnetDB *db, int group_id, const char *user_name)
 {
     char sql[512];
 
+    char *esc_user_name = ccnet_db_escape_string (db, user_name);
     snprintf (sql, sizeof(sql), "SELECT `group_id` FROM `GroupUser` WHERE "
               "`group_id` = %d AND `user_name` = '%s' AND `is_staff` = 1",
-              group_id, user_name);
+              group_id, esc_user_name);
+    g_free (esc_user_name);
     
     return ccnet_db_check_for_existence (db, sql);
 }
@@ -359,8 +369,10 @@ int ccnet_group_manager_add_member (CcnetGroupManager *mgr,
     /*     return -1; */
     /* } */
     
+    char *esc_member_name = ccnet_db_escape_string (db, member_name);
     snprintf (sql, sizeof(sql), "INSERT INTO `GroupUser` VALUES (%d, '%s', %d)",
-              group_id, member_name, 0);
+              group_id, esc_member_name, 0);
+    g_free (esc_member_name);
     if (ccnet_db_query (db, sql) < 0) {
         g_set_error (error, CCNET_DOMAIN, 0, "Failed to add member to group");
         return -1;
@@ -397,8 +409,10 @@ int ccnet_group_manager_remove_member (CcnetGroupManager *mgr,
         return -1;
     }
 
+    char *esc_member_name = ccnet_db_escape_string (db, member_name);
     snprintf (sql, sizeof(sql), "DELETE FROM `GroupUser` WHERE `group_id`=%d AND "
-              "`user_name`='%s'", group_id, member_name);
+              "`user_name`='%s'", group_id, esc_member_name);
+    g_free (esc_member_name);
     ccnet_db_query (db, sql);
 
     return 0;
@@ -412,9 +426,11 @@ int ccnet_group_manager_set_admin (CcnetGroupManager *mgr,
     CcnetDB *db = mgr->priv->db;
     char sql[512];
 
+    char *esc_member_name = ccnet_db_escape_string (db, member_name);
     snprintf (sql, sizeof(sql), "UPDATE `GroupUser` SET `is_staff` = 1 "
               "WHERE `group_id` = %d and `user_name` = '%s'",
-              group_id, member_name);
+              group_id, esc_member_name);
+    g_free (esc_member_name);
     ccnet_db_query (db, sql);
 
     return 0;
@@ -428,9 +444,11 @@ int ccnet_group_manager_unset_admin (CcnetGroupManager *mgr,
     CcnetDB *db = mgr->priv->db;
     char sql[512];
 
+    char *esc_member_name = ccnet_db_escape_string (db, member_name);
     snprintf (sql, sizeof(sql), "UPDATE `GroupUser` SET `is_staff` = 0 "
               "WHERE `group_id` = %d and `user_name` = '%s'",
-              group_id, member_name);
+              group_id, esc_member_name);
+    g_free (esc_member_name);
     ccnet_db_query (db, sql);
 
     return 0;
@@ -457,8 +475,10 @@ int ccnet_group_manager_quit_group (CcnetGroupManager *mgr,
         return -1;
     }
     
+    char *esc_user_name = ccnet_db_escape_string (db, user_name);
     snprintf (sql, sizeof(sql), "DELETE FROM `GroupUser` WHERE `group_id`=%d "
-              "AND `user_name`='%s'", group_id, user_name);
+              "AND `user_name`='%s'", group_id, esc_user_name);
+    g_free (esc_user_name);
     ccnet_db_query (db, sql);
 
     return 0;
@@ -485,8 +505,10 @@ ccnet_group_manager_get_groupids_by_user (CcnetGroupManager *mgr,
     char sql[512];
     GList *group_ids = NULL;
 
+    char *esc_user_name = ccnet_db_escape_string (db, user_name);
     snprintf (sql, sizeof(sql), "SELECT `group_id` FROM `GroupUser` "
-              "WHERE `user_name`='%s'", user_name);
+              "WHERE `user_name`='%s'", esc_user_name);
+    g_free (esc_user_name);
 
     if (ccnet_db_foreach_selected_row (db, sql, get_group_ids_cb,
                                        &group_ids) < 0) {
@@ -592,8 +614,10 @@ ccnet_group_manager_remove_group_user (CcnetGroupManager *mgr,
     CcnetDB *db = mgr->priv->db;
     char sql[256];
 
+    char *esc_user = ccnet_db_escape_string (db, user);
     snprintf (sql, sizeof(sql), "DELETE FROM `GroupUser` "
-              "WHERE `user_name` = '%s'", user);
+              "WHERE `user_name` = '%s'", esc_user);
+    g_free (esc_user);
     return ccnet_db_query (db, sql);
 }
 
@@ -605,8 +629,10 @@ ccnet_group_manager_is_group_user (CcnetGroupManager *mgr,
     CcnetDB *db = mgr->priv->db;
     char sql[512];
 
+    char *esc_user = ccnet_db_escape_string (db, user);
     snprintf (sql, sizeof(sql), "SELECT group_id FROM `GroupUser` "
-              "WHERE `group_id`=%d AND `user_name`='%s'", group_id, user);
+              "WHERE `group_id`=%d AND `user_name`='%s'", group_id, esc_user);
+    g_free (esc_user);
     return ccnet_db_check_for_existence (db, sql);
 }
 

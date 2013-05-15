@@ -65,6 +65,9 @@ ccnet_db_get_int64 (CcnetDB *db, const char *sql);
 char *
 ccnet_db_get_string (CcnetDB *db, const char *sql);
 
+char *
+ccnet_db_escape_string (CcnetDB *db, const char *from);
+
 #else
 
 #define CcnetDB sqlite3

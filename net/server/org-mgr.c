@@ -407,9 +407,11 @@ ccnet_org_manager_get_orgs_by_user (CcnetOrgManager *mgr,
     char sql[512];
     GList *ret = NULL;
 
+    char *esc_email = ccnet_db_escape_string (db, email);
     snprintf (sql, sizeof(sql), "SELECT t1.org_id, email, is_staff, org_name,"
               " url_prefix, creator, ctime FROM OrgUser t1, Organization t2"
-              " WHERE t1.org_id = t2.org_id AND email = '%s'", email);
+              " WHERE t1.org_id = t2.org_id AND email = '%s'", esc_email);
+    g_free (esc_email);
 
     if (ccnet_db_foreach_selected_row (db, sql, get_orgs_by_user_cb,
                                        &ret) < 0) {
@@ -552,8 +554,10 @@ ccnet_org_manager_org_user_exists (CcnetOrgManager *mgr,
     CcnetDB *db = mgr->priv->db;
     char sql[512];
 
+    char *esc_email = ccnet_db_escape_string (db, email);
     snprintf (sql, sizeof(sql), "SELECT org_id FROM OrgUser WHERE "
-              "org_id = %d AND email = '%s'", org_id, email);
+              "org_id = %d AND email = '%s'", org_id, esc_email);
+    g_free (esc_email);
 
     return ccnet_db_check_for_existence (db, sql);
 }
@@ -581,8 +585,10 @@ ccnet_org_manager_is_org_staff (CcnetOrgManager *mgr,
     CcnetDB *db = mgr->priv->db;
     char sql[256];
 
+    char *esc_email = ccnet_db_escape_string (db, email);
     snprintf (sql, sizeof(sql), "SELECT is_staff FROM OrgUser "
-              "WHERE org_id=%d AND email='%s'", org_id, email);
+              "WHERE org_id=%d AND email='%s'", org_id, esc_email);
+    g_free (esc_email);
 
     return ccnet_db_get_int (db, sql);    
 }
